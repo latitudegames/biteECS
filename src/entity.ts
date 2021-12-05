@@ -1,19 +1,6 @@
-import {
-  addComponent,
-  addEntity,
-  hasComponent,
-  Component,
-  IWorld,
-  removeComponent,
-  removeEntity,
-} from "bitecs";
+import { addEntity, removeEntity } from "bitecs";
 import ComponentProxy from "./componentProxy";
 import World from "./world";
-
-type ComponentStorage = {
-  store: Component;
-  proxy: ComponentProxy;
-};
 
 /**
  * Entity class is a wrapper around the bitECS entity giving it helper functions
@@ -22,9 +9,7 @@ type ComponentStorage = {
  * component proxies with helper setters and getters.
  */
 export default class Entity {
-  componentMap: Map<string, ComponentStorage>;
-  componentKeyMap: Map<Component, string>;
-  proxyKeyMap: Map<ComponentProxy, string>;
+  componentMap: Map<string, ComponentProxy>;
   eid: number;
   world: World;
 
@@ -32,40 +17,25 @@ export default class Entity {
     this.eid = addEntity(world.store);
     this.world = world;
     this.componentMap = new Map();
-    this.componentKeyMap = new Map();
-    this.proxyKeyMap = new Map();
   }
 
   /**
    * Add a component to the entity.  Requires a key, for now, that tells the entity how to map
    * the component to itself.
    */
-  addComponent(key: string, store: Component): void {
-    addComponent(this.world.store, store, this.eid);
+  addComponent(component: ComponentProxy | string): void {
+    // We get the name of the component to use as a key, either from the component or as a string
+    const name = typeof component === "string" ? component : component.name;
 
-    // We create the proxy via the world factory method which will reuse proxies.
-    const proxy = this.world.createComponentProxy(store, this);
-
-    const storage: ComponentStorage = {
-      store,
-      proxy,
-    };
+    const proxy = this.world.componentManager.createComponentProxy(name, this);
 
     // Add the component to the map
-    this.componentMap.set(key, storage);
-    // Store the Components key for later lookup
-    this.componentKeyMap.set(store, key);
-    // store the prixies key for later reference
-    this.proxyKeyMap.set(proxy, key);
+    this.componentMap.set(name, proxy);
 
-    // We add a new property to the entity that lets us access the component from the map
-    Object.defineProperty(this, key, {
-      get: (): ComponentProxy | undefined => {
-        const component = this.componentMap.get(key);
-
-        if (component?.proxy) return component.proxy;
-
-        return undefined;
+    // define getter to get a component from the entity
+    Object.defineProperty(this, name, {
+      get() {
+        return this.componentMap.get(name);
       },
     });
   }
@@ -74,28 +44,33 @@ export default class Entity {
    * Removes a component from the entity.
    * Note to self.  Need to handle possible proxies here instead of raw components.
    */
-  removeComponent(_component: Component | ComponentProxy): void {
-    const isProxy = _component instanceof ComponentProxy;
-    const key = isProxy
-      ? (this.proxyKeyMap.get(_component) as string)
-      : (this.componentKeyMap.get(_component) as string);
-    const component = this.componentMap.get(key) as ComponentStorage;
+  removeComponent(component: ComponentProxy | string): void {
+    const name = typeof component === "string" ? component : component.name;
+    const proxy = this.componentMap.get(name);
 
-    removeComponent(this.world.store, component.store, this.eid);
-    this.world.retireProxy(component.proxy);
-    this.componentMap.delete(key);
-    this.componentKeyMap.delete(component.store);
-    this.proxyKeyMap.delete(component.proxy);
+    if (!proxy) throw new Error(`No proxy found with name ${name}`);
+
+    this.world.componentManager.retireProxy(proxy);
+    this.componentMap.delete(name);
   }
 
   /**
    * Gets a single component from the map given a key
    */
   getComponent(key: string): ComponentProxy {
-    const component = this.componentMap.get(key);
-    if (!component) throw new Error(`No component with key ${key} exists.`);
+    const proxy = this.componentMap.get(key);
+    if (!proxy) throw new Error(`No component with key ${key} exists.`);
 
-    return component.proxy;
+    return proxy;
+  }
+
+  hasComponent(key: string): boolean {
+    try {
+      this.getComponent(key);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -124,7 +99,7 @@ export default class Entity {
     // Could use normal get entities, but will stick to proxies for now.
     // getEntityComponents(this.world, this.entity);
     const components: ComponentProxy[] = [];
-    this.componentMap.forEach((component) => components.push(component.proxy));
+    this.componentMap.forEach((component) => components.push(component));
     return components;
   }
 
@@ -133,7 +108,7 @@ export default class Entity {
    * everything inside the class
    */
   destroy(): void {
-    this.componentKeyMap.forEach((_, Component) => {
+    this.componentMap.forEach((_, Component) => {
       this.removeComponent(Component);
     });
 

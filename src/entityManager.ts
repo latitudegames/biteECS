@@ -1,16 +1,17 @@
-import bitECS, { Query, QueryModifier } from "bitecs";
-import { Component, IWorld } from "bitecs";
+import ComponentProxy, { IComponentProxyNew } from "./componentProxy";
 import Entity from "./entity";
 import World from "./world";
-// these are stand in types until we can define proper types for them
 
-type Entities = number[];
-type PrefabMap = Record<string, any>;
-type ComponentMap = Record<string, any>;
-
-type CreateOverrides = {
-  [componentName: string]: Record<string, unknown>;
+export type PrefabComponent = {
+  component: string | IComponentProxyNew;
+  data?: Record<string, any>;
 };
+
+export type Prefab = PrefabComponent[];
+
+type PrefabMap = Map<string, Prefab>;
+
+type CreateOverrides = Record<string, PrefabComponent>;
 
 /*
 The entity manager is resposible for keeping track of all created entities, as well as registering and creating prefabs for the quick production of entities.  Prefabs help us bundle up all of our logic for creating a single entity into one easy to reuse place.
@@ -19,10 +20,9 @@ It also contains helper function to get entities by component types, remove comp
 
 The entity manager provides a nice level of abstraction on top of bitECS to ease some of the boilerplate and overhead.  In theory, each scene could actually have its own entity manager, and each EM has its own bitECS world, allowing there to be a clean separation from one scene to the next.
 */
-export class EntityManager {
+export default class EntityManager {
   // private scene: Phaser.Scene;
   private world: World;
-  private componentMap: ComponentMap;
   private entityMap: Map<number, Entity>;
   private prefabMap: PrefabMap;
 
@@ -30,7 +30,6 @@ export class EntityManager {
     // this.scene = scene;
     this.prefabMap = new Map();
     this.entityMap = new Map();
-    this.componentMap = new Map();
     this.world = world;
   }
 
@@ -41,9 +40,10 @@ export class EntityManager {
   /**
    * Create returns a "wrapped entity", which ios basically a bitECS entity wrapped inside a helper class that gives is a lot of helpful additonal functionality to our entity, like adding components, etc.
    */
-  create() {
+  create(): Entity {
     const entity = new Entity(this.world);
     this.entityMap.set(entity.eid, entity);
+    return entity;
   }
 
   /**
@@ -54,17 +54,22 @@ export class EntityManager {
   }
 
   /*
-  Register component is used to keep track of all components for when we create prefabs
-   */
-  registerComponent(key: string, component: Component) {
-    this.componentMap.set(key, component);
-  }
-
-  /*
   Register a prefab to later create
    */
-  registerPrefab(key: string, prefab: Record<string, any>) {
+  registerPrefab(key: string, prefab: Prefab) {
     this.prefabMap.set(key, prefab);
+  }
+
+  /**
+   * Get a registered prefab by key
+   */
+  getPrefab(key: string) {
+    const prefab = this.prefabMap.get(key);
+    if (!prefab)
+      throw new Error(
+        `Norefab found with key ${key}.  Please register your prefab or check your key.`
+      );
+    return prefab;
   }
 
   /*
@@ -76,70 +81,69 @@ export class EntityManager {
         y: 0
       }
     }
+
+  This also relies on the components in the prefab have already been registered in the component system, which should happen before any entity creation.
   */
-  // createPrefab(type: string, overrides: CreateOverrides[]): number {
-  //   const entity = this.create()
-  //   const prefab = this.prefabMap.get(type);
+  createPrefab(type: string, overrides: CreateOverrides[]): Entity {
+    const entity = this.create();
+    const prefab = this.prefabMap.get(type);
 
-  //   for (let i = 0; i < prefab.length; i++) {
-  //     const config = prefab[i];
-  //     const override = overrides[config.component] || {};
-  //     const Component = this.componentMap.get(config.component);
+    if (!prefab)
+      throw new Error(
+        `No prefab of type ${type} found. Please register your prefab before creating it.`
+      );
 
-  //     // allow for a consumer to set overrides to different component data if needed.
-  //     const data = {
-  //       ...config.data,
-  //       ...override,
-  //     };
+    for (let i = 0; i < prefab.length; i++) {
+      const config = prefab[i];
+      const key =
+        typeof config.component === "string"
+          ? config.component
+          : config.component.key;
+      const override = overrides && overrides[key] ? overrides[key] : {};
 
-  //     addComponent(this.world, Component, entity);
+      // todo better component verification to ensure it is a string, a procy, or a bitECS component
+      const Component =
+        typeof config.component === "string"
+          ? this.world.componentManager.getComponent(config.component)
+          : config.component;
 
-  //     const dataEntries = Object.entries(data);
+      if (!Component) throw new Error(`No component found for key ${key}`);
 
-  //     // now we have to go over each data object so we can add it to the components array
-  //     for (let i = 0; i < dataEntries.length; i++) {
-  //       const [key, value] = dataEntries[i];
-  //       // eg. equivalent of doing Position.x[entity] = value
-  //       Component[key][entity] = value;
-  //     }
-  //   }
+      const component = new (Component as IComponentProxyNew)(
+        this.world,
+        entity
+      );
 
-  //   this.entities.push(entity);
-  //   return entity;
-  // }
+      // add the component to the entity
+      entity.addComponent(component as ComponentProxy);
 
-  /*
-  Check if an entity has a given component
-   */
-  hasComponent() {}
+      // allow for a consumer to set overrides to different component data if needed.
+      const data = {
+        ...config.data,
+        ...override,
+      };
 
-  /*
-  Query for all entities with a given set of components
-   */
-  query() {}
+      const dataEntries = Object.entries(data);
+
+      // now we have to go over each data object so we can add it to the components array
+      for (let i = 0; i < dataEntries.length; i++) {
+        const [dataKey, value] = dataEntries[i];
+        // eg. equivalent of doing Position.x[entity] = value
+        entity[key][dataKey] = value;
+      }
+    }
+
+    this.entityMap.set(entity.eid, entity);
+    return entity;
+  }
 
   /*
   Get all entities which have a specific component
    */
-  getAllEntitiesWithComponent() {}
+  private getAllEntitiesWithComponent() {}
 
   /*
   Get all entities with multiple components
    */
-  getAllEntitiesWithComponents() {}
-
-  /*
-  Helper Function which returns an object with all 3 query types on it.
-   */
-  defineQuery(components: (Component | QueryModifier)[]) {
-    const query = bitECS.defineQuery(components) as Query;
-    const enterQuery = bitECS.enterQuery(query);
-    const exitQuery = bitECS.exitQuery(query);
-    const wrappedQuery = (world = this.world.store) => query(world) as number[];
-    wrappedQuery.enter = (world = this.world.store) =>
-      enterQuery(world) as number[];
-    wrappedQuery.exit = (world = this.world.store) =>
-      exitQuery(world) as number[];
-    return wrappedQuery;
-  }
+  private getAllEntitiesWithComponents() {}
 }

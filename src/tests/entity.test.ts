@@ -3,18 +3,38 @@ import World from "../world";
 import { defineComponent, Types } from "bitecs";
 import ComponentProxy from "../componentProxy";
 
-describe("Entity class", () => {
-  let world;
-  let entity;
-  let Position;
+const key = "position";
+const Position = defineComponent({
+  x: Types.ui32,
+  y: Types.ui32,
+});
 
+let world;
+let entity;
+let proxy;
+
+jest.mock("../componentManager", () => {
+  return jest.fn().mockImplementation(() => {
+    return {
+      createComponentProxy: (name) => {
+        return new ComponentProxy(world, Position, entity, name);
+      },
+      retireProxy: () => {},
+    };
+  });
+});
+
+describe("Entity class", () => {
   beforeEach(() => {
     world = new World();
     entity = new Entity(world);
-    Position = defineComponent({
-      x: Types.ui32,
-      y: Types.ui32,
-    });
+    proxy = new ComponentProxy(world, Position, entity, key);
+  });
+
+  afterEach(() => {
+    world = undefined;
+    entity = undefined;
+    proxy = undefined;
   });
 
   test("should create an entity", () => {
@@ -23,39 +43,34 @@ describe("Entity class", () => {
   });
 
   test("should add a component", () => {
-    const key = "component";
-    entity.addComponent(key, Position);
+    entity.addComponent(key, proxy);
 
     expect(entity.componentMap.get(key)).toBeDefined();
   });
 
   test("should return a component by key", () => {
-    const key = "component";
-    entity.addComponent(key, Position);
+    entity.addComponent(key, proxy);
 
     expect(entity.getComponent(key)).toBeDefined();
   });
 
   test("should create a component proxy", () => {
-    const key = "component";
-    entity.addComponent(key, Position);
+    entity.addComponent(key, proxy);
 
     expect(entity.getComponent(key)).toEqual(expect.any(ComponentProxy));
   });
 
   test("should remove a bitECS component", () => {
-    const key = "component";
-    entity.addComponent(key, Position);
+    entity.addComponent(key, proxy);
 
     expect(entity.getComponent(key)).toBeDefined();
-    entity.removeComponent(Position);
+    entity.removeComponent(proxy);
 
     expect(() => entity.getComponent(key)).toThrow();
   });
 
   test("should remove a proxy component and clear all maps", () => {
-    const key = "component";
-    entity.addComponent(key, Position);
+    entity.addComponent(key, proxy);
 
     expect(entity.getComponent(key)).toBeDefined();
     const component = entity.getComponent(key);
@@ -63,20 +78,17 @@ describe("Entity class", () => {
 
     expect(() => entity.getComponent(key)).toThrow();
     expect(entity.componentMap.size).toEqual(0);
-    expect(entity.proxyKeyMap.size).toEqual(0);
-    expect(entity.componentKeyMap.size).toEqual(0);
   });
 
   test("should create getter to access component on add", () => {
-    const key = "component";
-    entity.addComponent(key, Position);
+    entity.addComponent(key, proxy);
 
     const component = entity.getComponent(key);
-    expect(entity.component).toBeDefined();
-    expect(entity.component).toEqual(component);
+    expect(entity.position).toBeDefined();
+    expect(entity.position).toEqual(component);
 
     entity.removeComponent(component);
-    expect(entity.component).not.toBeDefined();
+    expect(entity.positiont).not.toBeDefined();
   });
 
   test("should get and set to an entity property component", () => {
@@ -99,14 +111,20 @@ describe("Entity class", () => {
       y: Types.ui32,
     };
 
-    entity.addComponent("velocity", velocity);
+    const velocityProxy = new ComponentProxy(
+      world,
+      velocity,
+      entity,
+      "velocity"
+    );
 
-    const velocityProxy = entity.componentMap.get("velocity").proxy;
-    const positionProxy = entity.componentMap.get("position").proxy;
+    entity.addComponent(velocityProxy);
 
-    expect(entity.components().length).toEqual(2);
-    expect(entity.components()).toContain(velocityProxy);
-    expect(entity.components()).toContain(positionProxy);
+    const components = entity.components().map((c) => c.name);
+
+    expect(components.length).toEqual(2);
+    expect(components).toContainEqual(velocityProxy.name);
+    expect(components).toContain(proxy.name);
   });
 
   test("should destroy itself", () => {
@@ -118,22 +136,23 @@ describe("Entity class", () => {
       y: Types.ui32,
     };
 
+    const velocityProxy = new ComponentProxy(
+      world,
+      velocity,
+      entity,
+      "velocity"
+    );
+
     entity.addComponent("velocity", velocity);
 
-    const velocityProxy = entity.componentMap.get("velocity").proxy;
-    const positionProxy = entity.componentMap.get("position").proxy;
+    const components = entity.components().map((c) => c.name);
 
-    expect(entity.components().length).toEqual(2);
-    expect(entity.components()).toContain(velocityProxy);
-    expect(entity.components()).toContain(positionProxy);
+    expect(components.length).toEqual(2);
+    expect(components).toContain(velocityProxy.name);
+    expect(components).toContain(proxy.name);
 
     entity.destroy();
     expect(entity.components().length).toEqual(0);
     expect(entity.componentMap.size).toEqual(0);
-    expect(entity.proxyKeyMap.size).toEqual(0);
-    expect(entity.componentKeyMap.size).toEqual(0);
-
-    // todo stub the entity manager
-    expect(world.entityManager.entityMap.size).toEqual(0);
   });
 });
