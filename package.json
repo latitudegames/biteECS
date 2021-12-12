@@ -34,7 +34,8 @@
   "dependencies": {
     "@typescript-eslint/eslint-plugin": "^5.4.0",
     "@typescript-eslint/parser": "^5.4.0",
-    "bitecs": "^0.3.33"
+    "bitecs": "^0.3.33",
+    "phaser": "^3.55.2"
   },
   "parcelCleanPaths": [
     "dist"
