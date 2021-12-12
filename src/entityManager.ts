@@ -38,7 +38,7 @@ export default class EntityManager {
   // register prefab with new entity class
 
   /**
-   * Create returns a "wrapped entity", which ios basically a bitECS entity wrapped inside a helper class that gives is a lot of helpful additonal functionality to our entity, like adding components, etc.
+   * Create returns a "wrapped entity", which is basically a bitECS entity wrapped inside a helper class that gives is a lot of helpful additonal functionality to our entity, like adding components, etc.
    */
   create(): Entity {
     const entity = new Entity(this.world);
@@ -47,10 +47,17 @@ export default class EntityManager {
   }
 
   /**
-   * will delete an entity from the internal entity map
+   * will destroy and entity and delete it from the internal entity map
    */
-  remove(entity) {
+  remove(entity: Entity): void {
     this.entityMap.delete(entity.eid);
+  }
+
+  /**
+   * Destroys all entities inside the entity manager
+   */
+  destroy(): void {
+    this.entityMap.forEach((entity) => entity.destroy());
   }
 
   /*
@@ -72,19 +79,30 @@ export default class EntityManager {
     return prefab;
   }
 
+  /**
+   * Fetches entity by an id.
+   */
+  getEntityById(eid: number) {
+    const entity = this.entityMap.get(eid);
+
+    if (!entity) throw new Error(`No entity found with id ${eid}`);
+
+    return entity;
+  }
+
   /*
-  Creates an entity from a prefab.  A prefab is a bit like a factory for making entities. Prefabs are a an aray of data mapped to individual component names. Prefab data shape looks similar to this:
-    {
+  Creates an entity from a prefab.  A prefab is a bit like a factory for making entities. Prefabs are a an array of data mapped to individual component names. Prefab data shape looks similar to this:
+   [ {
       component: 'componentName',
       data: {
         x: 0,
         y: 0
       }
-    }
+    }]
 
   This also relies on the components in the prefab have already been registered in the component system, which should happen before any entity creation.
   */
-  createPrefab(type: string, overrides: CreateOverrides[]): Entity {
+  createPrefab(type: string, overrides?: CreateOverrides[]): Entity {
     const entity = this.create();
     const prefab = this.prefabMap.get(type);
 
@@ -101,7 +119,7 @@ export default class EntityManager {
           : config.component.key;
       const override = overrides && overrides[key] ? overrides[key] : {};
 
-      // todo better component verification to ensure it is a string, a procy, or a bitECS component
+      // todo better component verification to ensure it is a string, a proxy, or a bitECS component
       const Component =
         typeof config.component === "string"
           ? this.world.componentManager.getComponent(config.component)
@@ -115,7 +133,7 @@ export default class EntityManager {
       );
 
       // add the component to the entity
-      entity.addComponent(component as ComponentProxy);
+      entity.addComponent(component as ComponentProxy<any>);
 
       // allow for a consumer to set overrides to different component data if needed.
       const data = {

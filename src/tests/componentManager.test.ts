@@ -15,7 +15,7 @@ let entity;
 let positionProxy;
 let componentManager;
 
-class PositionProxy extends ComponentProxy {
+class PositionProxy extends ComponentProxy<any> {
   static key = key;
   constructor() {
     super(world, Position, entity, key);
@@ -82,6 +82,13 @@ describe("component manager", () => {
 
   test("should return a query interface", () => {
     const query = componentManager.defineQuery([positionProxy]);
+    expect(typeof query).toEqual("function");
+    expect(query.enter).toBeDefined();
+    expect(query.exit).toBeDefined();
+  });
+
+  test("should return a query interface from an array of component keys", () => {
+    const query = componentManager.defineQuery(["position"]);
     expect(typeof query).toEqual("function");
     expect(query.enter).toBeDefined();
     expect(query.exit).toBeDefined();

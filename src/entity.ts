@@ -9,21 +9,28 @@ import World from "./world";
  * component proxies with helper setters and getters.
  */
 export default class Entity {
-  componentMap: Map<string, ComponentProxy>;
+  componentMap: Map<string, ComponentProxy<any>>;
   eid: number;
   world: World;
+  children: Set<number>;
+  sprite: any;
+  position: any;
+  texture: any;
+  velocity: any;
+  input: any;
 
   constructor(world: World) {
     this.eid = addEntity(world.store);
     this.world = world;
     this.componentMap = new Map();
+    this.children = new Set();
   }
 
   /**
    * Add a component to the entity.  Requires a key, for now, that tells the entity how to map
    * the component to itself.
    */
-  addComponent(component: ComponentProxy | string): void {
+  addComponent(component: ComponentProxy<any> | string): void {
     // We get the name of the component to use as a key, either from the component or as a string
     const name = typeof component === "string" ? component : component.name;
 
@@ -33,6 +40,10 @@ export default class Entity {
     this.componentMap.set(name, proxy);
 
     // define getter to get a component from the entity
+
+    Object.defineProperty(this, name, {
+      configurable: true,
+    });
     Object.defineProperty(this, name, {
       get() {
         return this.componentMap.get(name);
@@ -44,7 +55,7 @@ export default class Entity {
    * Removes a component from the entity.
    * Note to self.  Need to handle possible proxies here instead of raw components.
    */
-  removeComponent(component: ComponentProxy | string): void {
+  removeComponent(component: ComponentProxy<any> | string): void {
     const name = typeof component === "string" ? component : component.name;
     const proxy = this.componentMap.get(name);
 
@@ -57,7 +68,7 @@ export default class Entity {
   /**
    * Gets a single component from the map given a key
    */
-  getComponent(key: string): ComponentProxy {
+  getComponent(key: string): ComponentProxy<any> {
     const proxy = this.componentMap.get(key);
     if (!proxy) throw new Error(`No component with key ${key} exists.`);
 
@@ -93,12 +104,19 @@ export default class Entity {
   }
 
   /**
+   * Add a child to the entity.
+   */
+  addChild(entity: Entity): void {
+    this.children.add(entity.eid);
+  }
+
+  /**
    * Gets all of an entities components.
    */
-  components(): ComponentProxy[] {
+  components(): ComponentProxy<any>[] {
     // Could use normal get entities, but will stick to proxies for now.
     // getEntityComponents(this.world, this.entity);
-    const components: ComponentProxy[] = [];
+    const components: ComponentProxy<any>[] = [];
     this.componentMap.forEach((component) => components.push(component));
     return components;
   }

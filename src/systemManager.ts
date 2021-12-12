@@ -1,5 +1,17 @@
-import { pipe, System } from "bitecs";
+import System from "./system";
 import World from "./world";
+
+export const pipe =
+  (...systems: System[]) =>
+  (input) => {
+    let tmp = input;
+    for (let i = 0; i < systems.length; i++) {
+      const system = systems[i];
+      const fn = system.execute.bind(system);
+      tmp = fn(tmp);
+    }
+    return tmp;
+  };
 
 export default class SystemManager {
   /**
@@ -67,6 +79,7 @@ export default class SystemManager {
    * Registers a system with this system manager.  Can be used to attach a system optionally to a system group.
    */
   registerSystems(systems: System[], key?: string) {
+    const executionMap = systems.map((s) => s.execute);
     if (!key) {
       this.defaultPipeline = [...this.defaultPipeline, ...systems];
       return true;

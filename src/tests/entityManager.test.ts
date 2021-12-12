@@ -14,7 +14,7 @@ let world;
 let entityManager;
 let entity;
 
-class PositionProxy extends ComponentProxy {
+class PositionProxy extends ComponentProxy<any> {
   static key = key;
   constructor() {
     super(world, Position, entity, key);

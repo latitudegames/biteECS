@@ -4,6 +4,8 @@ import {
   addComponent,
   removeComponent,
   Component,
+  ComponentType,
+  ISchema,
 } from "bitecs";
 import Entity from "./entity";
 import World from "./world";
@@ -28,14 +30,21 @@ export interface IComponentProxyNew extends IComponentProxy {
   key: string;
 }
 
-export default class ComponentProxy implements IComponentProxy {
+export default class ComponentProxy<Schema extends ISchema>
+  implements IComponentProxy
+{
   world: World;
-  store: Component;
+  store: ComponentType<Schema>;
   entity: Entity;
   name: string;
   static key: string = "baseaProxy";
 
-  constructor(world: World, store: Component, entity: Entity, name: string) {
+  constructor(
+    world: World,
+    store: ComponentType<Schema>,
+    entity: Entity,
+    name: string
+  ) {
     this.world = world;
     this.store = store;
     this.entity = entity;
